@@ -1,7 +1,7 @@
 /**
  * Quick Panel Agent Handler
  *
- * Background service that bridges Quick Panel (content script) with the native-server Agent.
+ * Background service that bridges Quick Panel (content script) with the BTCP-connected Agent.
  * Handles message routing, SSE streaming, and lifecycle management for AI chat requests.
  *
  * Architecture:
@@ -14,9 +14,8 @@
  */
 
 import type { AgentActRequest, RealtimeEvent } from 'chrome-mcp-shared';
-import { NativeMessageType } from 'chrome-mcp-shared';
 
-import { NATIVE_HOST, STORAGE_KEYS } from '@/common/constants';
+import { STORAGE_KEYS } from '@/common/constants';
 import {
   BACKGROUND_MESSAGE_TYPES,
   TOOL_MESSAGE_TYPES,
@@ -487,10 +486,7 @@ function isRequestStillActive(request: ActiveRequest): boolean {
  */
 async function startRequest(request: ActiveRequest): Promise<void> {
   try {
-    // Best-effort: ensure native server is running
-    await chrome.runtime.sendMessage({ type: NativeMessageType.ENSURE_NATIVE }).catch(() => null);
-
-    // Guard: check if cancelled during ENSURE_NATIVE
+    // Guard: check if cancelled
     if (!isRequestStillActive(request)) return;
 
     // Validate session still exists
@@ -597,7 +593,8 @@ async function handleSendToAI(
     STORAGE_KEY_SELECTED_SESSION,
   ]);
 
-  const port = normalizePort(stored?.[STORAGE_KEYS.NATIVE_SERVER_PORT]) ?? NATIVE_HOST.DEFAULT_PORT;
+  // TODO: Update for BTCP - the quick panel agent feature needs adaptation for BTCP server
+  const port = normalizePort(stored?.[STORAGE_KEYS.NATIVE_SERVER_PORT]) ?? 3000;
   const sessionId = normalizeString(stored?.[STORAGE_KEY_SELECTED_SESSION]).trim();
 
   if (!sessionId) {
@@ -698,7 +695,8 @@ async function handleCancelAI(
   let port = activeRequest?.port;
   if (!port) {
     const stored = await chrome.storage.local.get([STORAGE_KEYS.NATIVE_SERVER_PORT]);
-    port = normalizePort(stored?.[STORAGE_KEYS.NATIVE_SERVER_PORT]) ?? NATIVE_HOST.DEFAULT_PORT;
+    // TODO: Update for BTCP - use BTCP server port instead
+    port = normalizePort(stored?.[STORAGE_KEYS.NATIVE_SERVER_PORT]) ?? 3000;
   }
 
   // Cancel on server (async, don't await)

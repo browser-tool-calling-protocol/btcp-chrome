@@ -1,16 +1,14 @@
 /**
- * Composable for managing Agent Server connection state.
- * Handles native host connection, server status, and SSE stream.
+ * Composable for managing BTCP Server connection state.
+ * Handles BTCP client connection and SSE stream for agent chat.
  */
 import { ref, computed, onUnmounted } from 'vue';
-import { NativeMessageType } from 'chrome-mcp-shared';
-import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import type { AgentEngineInfo, RealtimeEvent } from 'chrome-mcp-shared';
 
-interface ServerStatus {
-  isRunning: boolean;
-  port?: number;
-  lastUpdated: number;
+interface BTCPStatus {
+  connected: boolean;
+  sessionId: string | null;
+  clientId: string | null;
 }
 
 export interface UseAgentServerOptions {
@@ -25,9 +23,7 @@ export interface UseAgentServerOptions {
 
 export function useAgentServer(options: UseAgentServerOptions = {}) {
   // State
-  const serverPort = ref<number | null>(null);
-  const nativeConnected = ref(false);
-  const serverStatus = ref<ServerStatus | null>(null);
+  const btcpStatus = ref<BTCPStatus | null>(null);
   const connecting = ref(false);
   const engines = ref<AgentEngineInfo[]>([]);
   const eventSource = ref<EventSource | null>(null);
@@ -42,123 +38,90 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
 
   // Computed
   const isServerReady = computed(() => {
-    return nativeConnected.value && serverStatus.value?.isRunning && serverPort.value !== null;
+    return btcpStatus.value?.connected ?? false;
   });
 
-  // Check native host connection using existing message type
-  async function checkNativeHost(): Promise<boolean> {
+  // Legacy compatibility
+  const nativeConnected = computed(() => btcpStatus.value?.connected ?? false);
+  const serverPort = ref<number | null>(null);
+  const serverStatus = ref<{ isRunning: boolean; port?: number; lastUpdated: number } | null>(null);
+
+  // Check BTCP connection status
+  async function checkBTCPStatus(): Promise<boolean> {
     try {
       const response = await chrome.runtime.sendMessage({
-        type: NativeMessageType.PING_NATIVE,
+        type: 'btcp_status',
       });
-      nativeConnected.value = response?.connected ?? false;
-      return nativeConnected.value;
+      if (response?.success) {
+        btcpStatus.value = {
+          connected: response.connected,
+          sessionId: response.sessionId,
+          clientId: response.clientId,
+        };
+        return response.connected;
+      }
+      return false;
     } catch (error) {
-      console.error('Failed to check native host:', error);
-      nativeConnected.value = false;
+      console.error('Failed to check BTCP status:', error);
       return false;
     }
   }
 
   /**
-   * Start native host connection.
-   * @param forceConnect - If true, use CONNECT_NATIVE (re-enables auto-connect).
-   *                       If false, use ENSURE_NATIVE (respects current auto-connect setting).
+   * Connect to BTCP server.
+   * @param serverUrl - BTCP server URL
    */
-  async function startNativeHost(forceConnect = false): Promise<boolean> {
+  async function connectBTCP(serverUrl: string): Promise<boolean> {
     try {
       const response = await chrome.runtime.sendMessage({
-        type: forceConnect ? NativeMessageType.CONNECT_NATIVE : NativeMessageType.ENSURE_NATIVE,
+        type: 'btcp_connect',
+        serverUrl,
       });
-      // Handle both response formats: { connected: boolean } and { success: boolean }
-      nativeConnected.value =
-        typeof response?.connected === 'boolean'
-          ? response.connected
-          : (response?.success ?? false);
-      return nativeConnected.value;
+      if (response?.success) {
+        btcpStatus.value = {
+          connected: true,
+          sessionId: null,
+          clientId: null,
+        };
+        return true;
+      }
+      return false;
     } catch (error) {
-      console.error('Failed to start native host:', error);
-      nativeConnected.value = false;
+      console.error('Failed to connect to BTCP:', error);
       return false;
     }
   }
 
-  // Get server status using existing message type
-  async function getServerStatus(): Promise<ServerStatus | null> {
+  /**
+   * Disconnect from BTCP server.
+   */
+  async function disconnectBTCP(): Promise<void> {
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
+      await chrome.runtime.sendMessage({
+        type: 'btcp_disconnect',
       });
-      if (response?.serverStatus) {
-        serverStatus.value = response.serverStatus;
-        if (response.serverStatus.port) {
-          serverPort.value = response.serverStatus.port;
-        }
-        // Also update native connected status from response
-        if (typeof response.connected === 'boolean') {
-          nativeConnected.value = response.connected;
-        }
-        return response.serverStatus;
-      }
-      return null;
+      btcpStatus.value = null;
     } catch (error) {
-      console.error('Failed to get server status:', error);
-      return null;
+      console.error('Failed to disconnect BTCP:', error);
     }
   }
 
-  interface EnsureNativeServerOptions {
-    /** If true, use CONNECT_NATIVE to re-enable auto-connect */
-    forceConnect?: boolean;
-  }
-
-  // Ensure native server is ready
-  async function ensureNativeServer(opts: EnsureNativeServerOptions = {}): Promise<boolean> {
-    const { forceConnect = false } = opts;
+  // Ensure BTCP server is ready
+  async function ensureNativeServer(): Promise<boolean> {
     connecting.value = true;
     try {
-      // Step 1: Check native host connection
-      let connected = await checkNativeHost();
-      if (!connected) {
-        // Try to start native host
-        connected = await startNativeHost(forceConnect);
-        if (!connected) {
-          console.error('Failed to connect to native host');
-          return false;
-        }
-        // Wait for connection to stabilize
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-
-      // Step 2: Get server status
-      const status = await getServerStatus();
-      if (!status?.isRunning || !status.port) {
-        console.error('Server not running or port not available', status);
-        return false;
-      }
-
-      // Step 3: Fetch engines
-      await fetchEngines();
-
-      return true;
+      // Check BTCP connection status
+      const connected = await checkBTCPStatus();
+      return connected;
     } finally {
       connecting.value = false;
     }
   }
 
-  // Fetch available engines
+  // Fetch available engines (placeholder - may not be needed with BTCP)
   async function fetchEngines(): Promise<void> {
-    if (!serverPort.value) return;
-    try {
-      const url = `http://127.0.0.1:${serverPort.value}/agent/engines`;
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        engines.value = data.engines || [];
-      }
-    } catch (error) {
-      console.error('Failed to fetch engines:', error);
-    }
+    // With BTCP, engines may be discovered differently
+    // For now, this is a no-op
   }
 
   // Check if SSE is connected
@@ -169,7 +132,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   // Open SSE connection (skip if already connected to same session)
   function openEventSource(): void {
     const targetSessionId = options.getSessionId?.()?.trim() ?? '';
-    if (!serverPort.value || !targetSessionId) return;
+    if (!targetSessionId) return;
 
     // Skip if already connected to the same session
     if (isEventSourceConnected() && currentStreamSessionId === targetSessionId) {
@@ -180,45 +143,10 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     // Close existing connection before subscribing to a new session
     closeEventSource();
 
+    // Note: With BTCP, SSE events come through the BTCP client, not a separate connection
+    // This function may need to be updated to use BTCP events instead
+    console.log('[AgentServer] SSE connection would be handled by BTCP client');
     currentStreamSessionId = targetSessionId;
-    const url = `http://127.0.0.1:${serverPort.value}/agent/chat/${encodeURIComponent(targetSessionId)}/stream`;
-    const es = new EventSource(url);
-
-    es.onopen = () => {
-      console.log('[AgentServer] SSE connection opened');
-      reconnectAttempts = 0;
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data) as RealtimeEvent;
-        options.onMessage?.(parsed);
-      } catch (err) {
-        console.error('[AgentServer] Failed to parse SSE message:', err);
-      }
-    };
-
-    es.onerror = (error) => {
-      console.error('[AgentServer] SSE error:', error);
-      es.close();
-      eventSource.value = null;
-
-      // Attempt reconnection with exponential backoff
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts);
-        reconnectAttempts++;
-        console.log(`[AgentServer] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
-        setTimeout(() => {
-          if (isServerReady.value) {
-            openEventSource();
-          }
-        }, delay);
-      } else {
-        options.onError?.('SSE connection failed after multiple attempts');
-      }
-    };
-
-    eventSource.value = es;
   }
 
   // Close SSE connection
@@ -230,12 +158,11 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     currentStreamSessionId = null;
   }
 
-  // Reconnect to server (explicit user action, re-enables auto-connect)
+  // Reconnect to server
   async function reconnect(): Promise<void> {
     closeEventSource();
     reconnectAttempts = 0;
-    // Explicit user reconnect: force connect to re-enable auto-connect in background
-    await ensureNativeServer({ forceConnect: true });
+    await ensureNativeServer();
     if (isServerReady.value) {
       openEventSource();
     }
@@ -244,7 +171,6 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   // Initialize
   async function initialize(): Promise<void> {
     await ensureNativeServer();
-    // Note: SSE connection is now opened explicitly when session is ready
   }
 
   // Cleanup on unmount
@@ -260,6 +186,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     connecting,
     engines,
     eventSource,
+    btcpStatus,
 
     // Computed
     isServerReady,
@@ -272,5 +199,8 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     isEventSourceConnected,
     reconnect,
     initialize,
+    checkBTCPStatus,
+    connectBTCP,
+    disconnectBTCP,
   };
 }

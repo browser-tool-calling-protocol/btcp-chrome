@@ -1,4 +1,4 @@
-import { initNativeHostListener } from './native-host';
+import { initBTCPClientListener } from './btcp-client';
 import {
   initSemanticSimilarityListener,
   initializeSemanticEngineIfCached,
@@ -25,6 +25,9 @@ const ENABLE_RR_V3 = true;
 /**
  * Background script entry point
  * Initializes all background services and listeners
+ *
+ * Uses BTCP (Browser Tool Calling Protocol) for communication with AI agents.
+ * The extension acts as a tool provider, connecting to a BTCP server via HTTP/SSE.
  */
 export default defineBackground(() => {
   // Open welcome page on first install
@@ -37,8 +40,8 @@ export default defineBackground(() => {
     }
   });
 
-  // Initialize core services
-  initNativeHostListener();
+  // Initialize BTCP client (replaces native messaging)
+  initBTCPClientListener();
   initSemanticSimilarityListener();
   initStorageManagerListener();
   // Tab group session management
