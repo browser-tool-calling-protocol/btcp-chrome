@@ -11,6 +11,7 @@ import { initWebEditorListeners } from './web-editor';
 import { initQuickPanelAgentHandler } from './quick-panel/agent-handler';
 import { initQuickPanelCommands } from './quick-panel/commands';
 import { initQuickPanelTabsHandler } from './quick-panel/tabs-handler';
+import { initSessionTabGroup, initSessionMessageListener } from './session-tab-group';
 
 // Record-Replay V3 (feature flag)
 import { bootstrapV3 } from './record-replay-v3/bootstrap';
@@ -40,6 +41,9 @@ export default defineBackground(() => {
   initNativeHostListener();
   initSemanticSimilarityListener();
   initStorageManagerListener();
+  // Session Tab Group manager (for constraining AI operations to a tab group)
+  initSessionTabGroup();
+  initSessionMessageListener();
   // Record & Replay V1/V2 listeners
   initRecordReplayListeners();
 

@@ -34,10 +34,13 @@
             :connection-state="connectionState"
             :show-back-button="true"
             :brand-label="engineDisplayName"
+            :tab-group-active="sessionTabGroup.state.value.isActive"
+            :tab-group-title="sessionTabGroup.state.value.title"
             @toggle:project-menu="toggleProjectMenu"
             @toggle:session-menu="toggleSessionMenu"
             @toggle:settings-menu="toggleSettingsMenu"
             @toggle:open-project-menu="toggleOpenProjectMenu"
+            @toggle:tab-group="handleToggleTabGroup"
             @back="handleBackToSessions"
           />
         </template>
@@ -186,6 +189,7 @@ import {
   AGENT_SERVER_PORT_KEY,
   type AgentThemeId,
 } from '../composables';
+import { useSessionTabGroup } from '../composables/useSessionTabGroup';
 import type { OpenProjectTarget } from 'chrome-mcp-shared';
 
 // New UI Components
@@ -330,6 +334,7 @@ const openProjectPreference = useOpenProjectPreference({
   getServerPort: () => server.serverPort.value,
 });
 const inputPreferences = useAgentInputPreferences();
+const sessionTabGroup = useSessionTabGroup();
 
 // Initialize Web Editor TX state at root level and provide to children
 // This prevents duplicate listener registration in child components
@@ -555,6 +560,22 @@ function toggleOpenProjectMenu(): void {
 function closeOpenProjectMenu(): void {
   openProjectMenuOpen.value = false;
   openProjectContext.value = null;
+}
+
+/**
+ * Toggle the session tab group.
+ * If active, end it. If not active, start a new one.
+ */
+async function handleToggleTabGroup(): Promise<void> {
+  if (sessionTabGroup.state.value.isActive) {
+    // End the session, keeping tabs open
+    await sessionTabGroup.endSession({ closeTabs: false });
+  } else {
+    // Start a new session with a descriptive title
+    const project = projects.selectedProject.value;
+    const title = project?.name ? `${project.name}` : 'AI Session';
+    await sessionTabGroup.startSession({ title, color: 'blue' });
+  }
 }
 
 /**

@@ -96,6 +96,36 @@
 
     <!-- Connection / Status / Settings -->
     <div class="flex items-center gap-3">
+      <!-- Session Tab Group Toggle -->
+      <button
+        class="flex items-center gap-1.5 px-2 py-1 text-xs ac-btn"
+        :style="{
+          backgroundColor: tabGroupActive ? 'var(--ac-accent-subtle)' : 'var(--ac-surface-muted)',
+          color: tabGroupActive ? 'var(--ac-accent)' : 'var(--ac-text-muted)',
+          borderRadius: 'var(--ac-radius-button)',
+          border: tabGroupActive ? '1px solid var(--ac-accent)' : '1px solid var(--ac-border)',
+        }"
+        :title="tabGroupActive ? 'Tab Group active - click to end' : 'Start Tab Group session'"
+        @click="$emit('toggle:tabGroup')"
+      >
+        <svg
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span v-if="tabGroupActive">{{ tabGroupTitle || 'Session' }}</span>
+        <span v-else>Tab Group</span>
+      </button>
+
       <!-- Connection Indicator -->
       <div class="flex items-center gap-1.5" :title="connectionText">
         <span
@@ -170,6 +200,10 @@ const props = defineProps<{
   showBackButton?: boolean;
   /** Brand label to display (e.g., "Claude Code", "Codex") */
   brandLabel?: string;
+  /** Whether a tab group session is active */
+  tabGroupActive?: boolean;
+  /** Title of the active tab group */
+  tabGroupTitle?: string;
 }>();
 
 defineEmits<{
@@ -177,6 +211,7 @@ defineEmits<{
   'toggle:sessionMenu': [];
   'toggle:settingsMenu': [];
   'toggle:openProjectMenu': [];
+  'toggle:tabGroup': [];
   /** Emitted when back button is clicked */
   back: [];
 }>();

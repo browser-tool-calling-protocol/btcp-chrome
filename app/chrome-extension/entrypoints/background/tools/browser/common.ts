@@ -2,6 +2,7 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from 'chrome-mcp-shared';
 import { captureFrameOnAction, isAutoCaptureActive } from './gif-recorder';
+import { isSessionActive, addTabToSession, getActiveWindowId } from '../../session-tab-group';
 
 // Default window dimensions
 const DEFAULT_WINDOW_WIDTH = 1280;
@@ -335,10 +336,22 @@ class NavigateTool extends BaseBrowserToolExecutor {
         }
       } else {
         console.log('Opening URL in the last active window.');
-        // Try to open a new tab in the specified window, otherwise the most recently active window
+        // Try to open a new tab in the specified window, session window, or most recently active window
         let targetWindow: chrome.windows.Window | null = null;
         if (typeof windowId === 'number') {
           targetWindow = await chrome.windows.get(windowId, { populate: false });
+        }
+        // If session is active and no explicit window specified, prefer session's window
+        if (!targetWindow && isSessionActive()) {
+          const sessionWindowId = getActiveWindowId();
+          if (sessionWindowId !== null) {
+            try {
+              targetWindow = await chrome.windows.get(sessionWindowId, { populate: false });
+              console.log(`Using session window ID: ${sessionWindowId}`);
+            } catch {
+              // Session window no longer exists
+            }
+          }
         }
         if (!targetWindow) {
           targetWindow = await chrome.windows.getLastFocused({ populate: false });
@@ -359,6 +372,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
           console.log(
             `URL opened in new Tab ID: ${newTab.id} in existing Window ID: ${targetWindow.id}`,
           );
+
+          // Add to session tab group if active
+          if (newTab.id && isSessionActive()) {
+            await addTabToSession(newTab.id);
+          }
 
           // Trigger auto-capture on new tab
           if (newTab.id) {
