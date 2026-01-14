@@ -1,15 +1,44 @@
 import { ToolExecutor } from '@/common/tool-handler';
 import type { ToolResult } from '@/common/tool-handler';
 import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
+import {
+  getCurrentSession,
+  getActiveTabInSession,
+  isTabIdInSession,
+  createTabInSession,
+  getSessionTabs,
+} from '../tab-group-session';
 
 const PING_TIMEOUT_MS = 300;
 
 /**
  * Base class for browser tool executors
+ * Includes session-scoped tab operations when a tab group session is active
  */
 export abstract class BaseBrowserToolExecutor implements ToolExecutor {
   abstract name: string;
   abstract execute(args: any): Promise<ToolResult>;
+
+  /**
+   * Check if a tab group session is currently active
+   */
+  protected hasActiveSession(): boolean {
+    return getCurrentSession() !== null;
+  }
+
+  /**
+   * Get the current session's group ID, or undefined if no session
+   */
+  protected getSessionGroupId(): number | undefined {
+    return getCurrentSession()?.groupId;
+  }
+
+  /**
+   * Get the current session's window ID, or undefined if no session
+   */
+  protected getSessionWindowId(): number | undefined {
+    return getCurrentSession()?.windowId;
+  }
 
   /**
    * Inject content script into tab
@@ -113,20 +142,37 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
 
   /**
    * Try to get an existing tab by id. Returns null when not found.
+   * If a session is active, verifies the tab belongs to the session.
    */
   protected async tryGetTab(tabId?: number): Promise<chrome.tabs.Tab | null> {
     if (typeof tabId !== 'number') return null;
     try {
-      return await chrome.tabs.get(tabId);
+      const tab = await chrome.tabs.get(tabId);
+      // If session is active, only return tab if it belongs to the session
+      if (this.hasActiveSession()) {
+        const inSession = await isTabIdInSession(tabId);
+        if (!inSession) {
+          console.warn(`Tab ${tabId} does not belong to the current session`);
+          return null;
+        }
+      }
+      return tab;
     } catch {
       return null;
     }
   }
 
   /**
-   * Get the active tab in the current window. Throws when not found.
+   * Get the active tab in the current window or session.
+   * If a session is active, returns the active tab within the session's tab group.
+   * Throws when not found.
    */
   protected async getActiveTabOrThrow(): Promise<chrome.tabs.Tab> {
+    if (this.hasActiveSession()) {
+      const tab = await getActiveTabInSession();
+      if (!tab || !tab.id) throw new Error('No active tab in session');
+      return tab;
+    }
     const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!active || !active.id) throw new Error('Active tab not found');
     return active;
@@ -151,9 +197,13 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
   }
 
   /**
-   * Get the active tab. When windowId provided, search within that window; otherwise currentWindow.
+   * Get the active tab in a window or session.
+   * If a session is active, prioritizes tabs within the session's tab group.
    */
   protected async getActiveTabInWindow(windowId?: number): Promise<chrome.tabs.Tab | null> {
+    if (this.hasActiveSession()) {
+      return getActiveTabInSession();
+    }
     if (typeof windowId === 'number') {
       const tabs = await chrome.tabs.query({ active: true, windowId });
       return tabs && tabs[0] ? tabs[0] : null;
@@ -169,5 +219,57 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
     const tab = await this.getActiveTabInWindow(windowId);
     if (!tab || !tab.id) throw new Error('Active tab not found');
     return tab;
+  }
+
+  /**
+   * Get all tabs that tools should operate on.
+   * If a session is active, returns only tabs in the session's tab group.
+   * Otherwise, returns all tabs or tabs matching the query.
+   */
+  protected async getSessionScopedTabs(query?: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> {
+    if (this.hasActiveSession()) {
+      // Return only tabs in the session's tab group
+      return getSessionTabs();
+    }
+    // No session - use the provided query or return all tabs
+    return chrome.tabs.query(query || {});
+  }
+
+  /**
+   * Create a new tab, adding it to the session's tab group if active.
+   */
+  protected async createTab(
+    url: string,
+    options?: { windowId?: number; active?: boolean },
+  ): Promise<chrome.tabs.Tab> {
+    const active = options?.active !== false;
+
+    if (this.hasActiveSession()) {
+      // Create tab in the session's tab group
+      const tab = await createTabInSession(url, active);
+      if (!tab) {
+        throw new Error('Failed to create tab in session');
+      }
+      return tab;
+    }
+
+    // No session - create tab normally
+    const windowId = options?.windowId;
+    return chrome.tabs.create({
+      url,
+      windowId,
+      active,
+    });
+  }
+
+  /**
+   * Verify a tab belongs to the current session (if one is active).
+   * Returns true if no session is active or if the tab belongs to the session.
+   */
+  protected async verifyTabInSession(tabId: number): Promise<boolean> {
+    if (!this.hasActiveSession()) {
+      return true;
+    }
+    return isTabIdInSession(tabId);
   }
 }

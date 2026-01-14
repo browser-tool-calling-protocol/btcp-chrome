@@ -161,6 +161,44 @@
                 </svg>
               </div>
             </button>
+            <button
+              class="navigator-item"
+              :class="{ 'navigator-item-active': activeTab === 'session' }"
+              @click="selectTab('session')"
+            >
+              <div class="navigator-item-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                  />
+                </svg>
+              </div>
+              <div class="navigator-item-content">
+                <span class="navigator-item-title">Tab Group Session</span>
+                <span class="navigator-item-desc">Manage scoped tab groups</span>
+              </div>
+              <div v-if="activeTab === 'session'" class="navigator-item-check">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -172,7 +210,7 @@
 import { ref, computed } from 'vue';
 import { useFloatingDrag } from '../composables/useFloatingDrag';
 
-type TabType = 'workflows' | 'element-markers' | 'agent-chat';
+type TabType = 'workflows' | 'element-markers' | 'agent-chat' | 'session';
 
 const BUTTON_SIZE = 36;
 const CLAMP_MARGIN = 12;
