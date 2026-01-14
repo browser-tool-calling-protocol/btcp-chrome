@@ -3,10 +3,12 @@
  * Centralized configuration values and magic constants
  */
 
-// Native Host Configuration
-export const NATIVE_HOST = {
-  NAME: 'com.chromemcp.nativehost',
-  DEFAULT_PORT: 12306,
+// BTCP (Browser Tool Calling Protocol) Configuration
+export const BTCP_CONFIG = {
+  DEFAULT_SERVER_URL: 'http://localhost:3000',
+  RECONNECT_DELAY: 1000,
+  MAX_RECONNECT_ATTEMPTS: 10,
+  CONNECTION_TIMEOUT: 30000,
 } as const;
 
 // Chrome Extension Icons
@@ -36,8 +38,8 @@ export const LIMITS = {
 
 // Error Messages
 export const ERROR_MESSAGES = {
-  NATIVE_CONNECTION_FAILED: 'Failed to connect to native host',
-  NATIVE_DISCONNECTED: 'Native connection disconnected',
+  BTCP_CONNECTION_FAILED: 'Failed to connect to BTCP server',
+  BTCP_DISCONNECTED: 'BTCP connection disconnected',
   SERVER_STATUS_LOAD_FAILED: 'Failed to load server status',
   SERVER_STATUS_SAVE_FAILED: 'Failed to save server status',
   TOOL_EXECUTION_FAILED: 'Tool execution failed',
@@ -51,9 +53,9 @@ export const ERROR_MESSAGES = {
 // Success Messages
 export const SUCCESS_MESSAGES = {
   TOOL_EXECUTED: 'Tool executed successfully',
-  CONNECTION_ESTABLISHED: 'Connection established',
-  SERVER_STARTED: 'Server started successfully',
-  SERVER_STOPPED: 'Server stopped successfully',
+  BTCP_CONNECTED: 'Connected to BTCP server',
+  BTCP_DISCONNECTED: 'Disconnected from BTCP server',
+  TOOLS_REGISTERED: 'Browser tools registered',
 } as const;
 
 // External Links
