@@ -2,6 +2,8 @@
 
 This document outlines the migration strategy for transitioning btcp-chrome from the current MCP (Model Context Protocol) over native messaging architecture to use the [btcp-client](https://github.com/browser-tool-calling-protocol/btcp-client) library and BTCP (Browser Tool Calling Protocol).
 
+> **Note:** This migration assumes that a [btcp-server](https://github.com/browser-tool-calling-protocol/btcp-server) instance is already deployed and available. The Chrome extension will act as a tool provider client connecting to the existing server.
+
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
@@ -37,7 +39,7 @@ AI Agent ─── HTTP Streaming ───► BTCP Server ◄─── HTTP Str
 
 The new architecture:
 - **Chrome Extension** becomes a pure tool provider shell using btcp-client
-- **BTCP Server** (external, to be implemented) acts as the message broker
+- **BTCP Server** (external, already exists) acts as the message broker
 - **AI Agent** connects to BTCP Server to discover and invoke tools
 - **No Native Messaging** - uses HTTP streaming (SSE) instead
 
@@ -191,7 +193,7 @@ The new architecture:
 
 **Tasks:**
 1. Remove native messaging code
-2. Remove native server from monorepo (or repurpose as BTCP server)
+2. Remove native server from monorepo
 3. Simplify extension architecture
 
 **Duration indicator:** Final phase
@@ -210,7 +212,6 @@ btcp-chrome/
 │
 ├── app/
 │   ├── native-server/             # DEPRECATE: No longer needed
-│   │                              # OR: Convert to BTCP server reference implementation
 │   │
 │   └── chrome-extension/
 │       └── entrypoints/
@@ -626,62 +627,10 @@ class ClickTool extends BaseBrowserToolExecutor {
 ### Phase 5: Cleanup
 
 - [ ] Remove `native-host.ts` and related code
-- [ ] Remove `app/native-server/` or repurpose
+- [ ] Remove `app/native-server/` directory
 - [ ] Remove native messaging permissions from manifest
 - [ ] Update `packages/shared/` to use BTCP types
 - [ ] Final testing and release
-
----
-
-## BTCP Server Requirements
-
-The Chrome extension will connect to a BTCP server. The server must implement:
-
-### Required Endpoints
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/events` | GET | SSE stream for server→client messages |
-| `/message` | POST | Client→server message transmission |
-| `/health` | GET | Health check |
-
-### Query Parameters
-
-- `sessionId`: Session identifier for routing
-- `clientType`: `browser` or `agent`
-- `version`: Protocol version
-
-### Message Types
-
-```typescript
-// Tool Registration
-{
-  jsonrpc: '2.0',
-  method: 'tools/register',
-  params: {
-    tools: BTCPToolDefinition[]
-  },
-  id: string
-}
-
-// Tool Call (server → browser)
-{
-  jsonrpc: '2.0',
-  method: 'tools/call',
-  params: {
-    name: string,
-    arguments: Record<string, unknown>
-  },
-  id: string
-}
-
-// Tool Response (browser → server)
-{
-  jsonrpc: '2.0',
-  result: BTCPToolCallResponse,
-  id: string
-}
-```
 
 ---
 
@@ -699,12 +648,6 @@ btcp-chrome/
 │   └── wasm-simd/                    # Unchanged
 │
 ├── app/
-│   ├── btcp-server/                  # NEW: Reference BTCP server (optional)
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── session-manager.ts
-│   │       └── message-broker.ts
-│   │
 │   └── chrome-extension/
 │       ├── entrypoints/
 │       │   ├── background/
@@ -725,8 +668,7 @@ btcp-chrome/
 │       └── ...
 │
 └── docs/
-    ├── MIGRATION-TO-BTCP-CLIENT.md   # This document
-    └── BTCP-SERVER-SPEC.md           # NEW: Server specification
+    └── MIGRATION-TO-BTCP-CLIENT.md   # This document
 ```
 
 ---
@@ -734,5 +676,6 @@ btcp-chrome/
 ## References
 
 - [btcp-client Repository](https://github.com/browser-tool-calling-protocol/btcp-client)
+- [btcp-server Repository](https://github.com/browser-tool-calling-protocol/btcp-server)
 - [Browser Tool Calling Protocol Specification](https://github.com/browser-tool-calling-protocol/spec)
 - [JSON-RPC 2.0 Specification](https://www.jsonrpc.org/specification)
