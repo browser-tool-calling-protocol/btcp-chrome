@@ -2,6 +2,7 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from 'chrome-mcp-shared';
 import { captureFrameOnAction, isAutoCaptureActive } from './gif-recorder';
+import { addTabToSession, getCurrentSession } from '../../tab-group-session';
 
 // Default window dimensions
 const DEFAULT_WINDOW_WIDTH = 1280;
@@ -139,9 +140,10 @@ class NavigateTool extends BaseBrowserToolExecutor {
         };
       }
 
-      // 1. Check if URL is already open
+      // 1. Check if URL is already open (within session scope if active)
       // Prefer Chrome's URL match patterns for robust matching (host/path variations)
       console.log(`Checking if URL is already open: ${url}`);
+      const session = getCurrentSession();
 
       // Build robust match patterns from the provided URL.
       // This mirrors the approach in CloseTabsTool: ensure wildcard path and
@@ -180,7 +182,12 @@ class NavigateTool extends BaseBrowserToolExecutor {
       };
 
       const urlPatterns = buildUrlPatterns(url);
-      const candidateTabs = await chrome.tabs.query({ url: urlPatterns });
+      let candidateTabs = await chrome.tabs.query({ url: urlPatterns });
+
+      // If session is active, filter to only tabs in the session's tab group
+      if (session) {
+        candidateTabs = candidateTabs.filter((tab) => tab.groupId === session.groupId);
+      }
       console.log(`Found ${candidateTabs.length} matching tabs with patterns:`, urlPatterns);
 
       // Prefer strict match when user specifies a concrete path/query.
@@ -335,6 +342,47 @@ class NavigateTool extends BaseBrowserToolExecutor {
         }
       } else {
         console.log('Opening URL in the last active window.');
+        // If session is active, create tab in session's window and add to group
+        if (session) {
+          console.log('Session active - creating tab in session tab group');
+          const newTab = await chrome.tabs.create({
+            url: url,
+            windowId: session.windowId,
+            active: background !== true,
+          });
+
+          if (newTab.id) {
+            // Add to session's tab group
+            await addTabToSession(newTab.id);
+
+            if (background !== true) {
+              await chrome.windows.update(session.windowId, { focused: true });
+            }
+
+            console.log(`URL opened in session Tab ID: ${newTab.id}`);
+
+            // Trigger auto-capture on new tab
+            await this.triggerAutoCapture(newTab.id, newTab.url);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: 'Opened URL in new tab in session',
+                    tabId: newTab.id,
+                    windowId: session.windowId,
+                    groupId: session.groupId,
+                    url: newTab.url,
+                  }),
+                },
+              ],
+              isError: false,
+            };
+          }
+        }
+
         // Try to open a new tab in the specified window, otherwise the most recently active window
         let targetWindow: chrome.windows.Window | null = null;
         if (typeof windowId === 'number') {
@@ -456,6 +504,7 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
     const { tabIds, url } = args;
     let urlPattern = url;
     console.log(`Attempting to close tabs with options:`, args);
+    const session = getCurrentSession();
 
     try {
       // If URL is provided, close all tabs matching that URL
@@ -486,7 +535,12 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
               : `${urlPattern}/*`;
         }
 
-        const tabs = await chrome.tabs.query({ url: urlPattern });
+        let tabs = await chrome.tabs.query({ url: urlPattern });
+
+        // If session is active, only close tabs in the session's tab group
+        if (session) {
+          tabs = tabs.filter((tab) => tab.groupId === session.groupId);
+        }
 
         if (!tabs || tabs.length === 0) {
           console.log(`No tabs found with URL pattern: ${urlPattern}`);
@@ -536,11 +590,17 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
       if (tabIds && tabIds.length > 0) {
         console.log(`Closing tabs with IDs: ${tabIds.join(', ')}`);
 
-        // Verify that all tabIds exist
+        // Verify that all tabIds exist and belong to session if active
         const existingTabs = await Promise.all(
           tabIds.map(async (tabId) => {
             try {
-              return await chrome.tabs.get(tabId);
+              const tab = await chrome.tabs.get(tabId);
+              // If session is active, only include tabs in the session's tab group
+              if (session && tab.groupId !== session.groupId) {
+                console.warn(`Tab ${tabId} does not belong to the current session`);
+                return null;
+              }
+              return tab;
             } catch (error) {
               console.warn(`Tab with ID ${tabId} not found`);
               return null;
@@ -590,7 +650,16 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
 
       // If no tabIds or URL provided, close the current active tab
       console.log('No tabIds or URL provided, closing active tab');
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      let activeTab: chrome.tabs.Tab | undefined;
+
+      if (session) {
+        // Get active tab within session
+        const sessionTabs = await chrome.tabs.query({ groupId: session.groupId });
+        activeTab = sessionTabs.find((t) => t.active) || sessionTabs[0];
+      } else {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        activeTab = tab;
+      }
 
       if (!activeTab || !activeTab.id) {
         return createErrorResponse('No active tab found');
@@ -636,10 +705,21 @@ class SwitchTabTool extends BaseBrowserToolExecutor {
 
   async execute(args: SwitchTabToolParams): Promise<ToolResult> {
     const { tabId, windowId } = args;
+    const session = getCurrentSession();
 
     console.log(`Attempting to switch to tab ID: ${tabId} in window ID: ${windowId}`);
 
     try {
+      // If session is active, verify tab belongs to the session
+      if (session) {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.groupId !== session.groupId) {
+          return createErrorResponse(
+            `Tab ${tabId} does not belong to the current session. Only tabs in the session can be switched to.`,
+          );
+        }
+      }
+
       if (windowId !== undefined) {
         await chrome.windows.update(windowId, { focused: true });
       }

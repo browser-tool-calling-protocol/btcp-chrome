@@ -88,6 +88,12 @@ export const BACKGROUND_MESSAGE_TYPES = {
   QUICK_PANEL_TABS_QUERY: 'quick_panel_tabs_query',
   QUICK_PANEL_TAB_ACTIVATE: 'quick_panel_tab_activate',
   QUICK_PANEL_TAB_CLOSE: 'quick_panel_tab_close',
+  // Tab group session management
+  TAB_GROUP_SESSION_START: 'tab_group_session_start',
+  TAB_GROUP_SESSION_END: 'tab_group_session_end',
+  TAB_GROUP_SESSION_GET: 'tab_group_session_get',
+  TAB_GROUP_SESSION_ADD_TAB: 'tab_group_session_add_tab',
+  TAB_GROUP_SESSION_CHANGED: 'tab_group_session_changed',
 } as const;
 
 // Offscreen message types

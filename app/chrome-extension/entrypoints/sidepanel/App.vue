@@ -34,6 +34,11 @@
       <AgentChat />
     </div>
 
+    <!-- Tab Group Session Tab -->
+    <div v-show="activeTab === 'session'" class="h-full overflow-auto">
+      <TabGroupSession />
+    </div>
+
     <!-- Element Markers Tab -->
     <div v-show="activeTab === 'element-markers'" class="element-markers-content">
       <div class="px-4 py-4">
@@ -292,6 +297,7 @@ import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import type { ElementMarker, UpsertMarkerRequest } from '@/common/element-marker-types';
 import AgentChat from './components/AgentChat.vue';
 import SidepanelNavigator from './components/SidepanelNavigator.vue';
+import TabGroupSession from './components/TabGroupSession.vue';
 import { WorkflowsView } from './components/workflows';
 import { useAgentTheme } from './composables/useAgentTheme';
 import { useWorkflowsV3, type FlowLite } from './composables/useWorkflowsV3';
@@ -300,10 +306,10 @@ import { useWorkflowsV3, type FlowLite } from './composables/useWorkflowsV3';
 const { theme: currentTheme, initTheme } = useAgentTheme();
 
 // Tab state - default to AgentChat
-const activeTab = ref<'workflows' | 'element-markers' | 'agent-chat'>('agent-chat');
+const activeTab = ref<'workflows' | 'element-markers' | 'agent-chat' | 'session'>('agent-chat');
 
 // Handle tab change and update URL for deep linking
-function handleTabChange(tab: 'workflows' | 'element-markers' | 'agent-chat') {
+function handleTabChange(tab: 'workflows' | 'element-markers' | 'agent-chat' | 'session') {
   activeTab.value = tab;
   // Update URL params for deep link
   const url = new URL(window.location.href);
@@ -741,6 +747,8 @@ onMounted(async () => {
     activeTab.value = 'agent-chat';
   } else if (tabParam === 'workflows') {
     activeTab.value = 'workflows';
+  } else if (tabParam === 'session') {
+    activeTab.value = 'session';
   }
 
   // V3 workflows data is auto-refreshed by useWorkflowsV3 composable
