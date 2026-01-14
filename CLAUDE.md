@@ -37,10 +37,13 @@ pnpm test              # Run all tests
 pnpm test:watch        # Watch mode
 pnpm vitest run tests/record-replay-v3/trigger-manager.test.ts  # Single test file
 
-# Native server tests (Jest)
+# Native server tests (Jest, tests are co-located in src/)
 cd app/native-server
-pnpm test              # Run all tests with coverage
+pnpm test              # Run all tests with coverage (80% line/function threshold)
 pnpm test:watch        # Watch mode
+
+# Type checking
+pnpm typecheck         # Run TypeScript checks across all packages
 ```
 
 ## Linting and Formatting
@@ -121,9 +124,30 @@ Messages between native server and extension use Chrome's native messaging with 
 - Request: `{ type: 'TOOL_CALL', toolName: string, params: object, requestId: string }`
 - Response: `{ requestId: string, result?: object, error?: string }`
 
+## Record/Replay System
+
+The extension includes a workflow automation system for recording and replaying browser actions:
+
+- **V3 Architecture**: `entrypoints/background/record-replay-v3/` - Trigger-based scheduler with multiple trigger types (cron, URL, DOM, manual, etc.)
+- **Visual Editor**: `entrypoints/web-editor-v2/` - Vue Flow-based drag-and-drop workflow editor
+- **Triggers**: Command, context menu, cron, DOM observer, interval, manual, once, URL pattern
+
+Tests are organized by component in `tests/record-replay-v3/` and `tests/web-editor-v2/`.
+
+## Commit Conventions
+
+Uses [Conventional Commits](https://www.conventionalcommits.org/) enforced via commitlint + husky:
+
+- `feat:` new features
+- `fix:` bug fixes
+- `docs:` documentation
+- `refactor:` code refactoring
+- `test:` adding tests
+
 ## File Conventions
 
 - Extension uses WXT framework conventions (`entrypoints/`, `public/`, etc.)
 - Tool implementations extend `BaseBrowserToolExecutor` pattern
 - Shared types use Zod schemas for runtime validation
 - Native server uses Fastify with TypeScript
+- Test imports use `@` and `~` aliases for extension root path
