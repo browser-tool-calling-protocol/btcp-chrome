@@ -3,6 +3,8 @@ import { OffscreenManager } from '@/utils/offscreen-manager';
 import { BACKGROUND_MESSAGE_TYPES, OFFSCREEN_MESSAGE_TYPES } from '@/common/message-types';
 import { STORAGE_KEYS, ERROR_MESSAGES } from '@/common/constants';
 import { hasAnyModelCache } from '@/utils/semantic-similarity-engine';
+import { withKeepaliveAndRetry } from '@/utils/keepalive-utils';
+import { acquireKeepalive } from './keepalive-manager';
 
 /**
  * Model configuration state management interface
@@ -40,8 +42,12 @@ export async function initializeSemanticEngineIfCached(): Promise<boolean> {
 
 /**
  * Initialize default semantic engine model
+ * Protected with keepalive to prevent Service Worker termination during model loading
  */
 export async function initializeDefaultSemanticEngine(): Promise<void> {
+  // Acquire keepalive for the entire initialization process
+  const release = acquireKeepalive('semantic-engine-init');
+
   try {
     console.log('Background: Initializing default semantic engine...');
 
@@ -59,25 +65,44 @@ export async function initializeDefaultSemanticEngine(): Promise<void> {
 
     await OffscreenManager.getInstance().ensureOffscreenDocument();
 
-    const response = await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_INIT,
-      config: {
-        useLocalFiles: false,
-        modelPreset: defaultModel,
-        modelVersion: defaultVersion,
-        modelDimension: modelInfo.dimension,
-        forceOffscreen: true,
+    // Use keepalive-wrapped retry for the critical offscreen communication
+    const initResult = await withKeepaliveAndRetry(
+      {
+        tag: 'semantic-engine-offscreen-init',
+        timeout: 120000, // 2 minutes for model download/init
+        retry: true,
+        maxRetries: 3,
+        retryDelay: 2000,
       },
-    });
+      async () => {
+        const response = await chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_INIT,
+          config: {
+            useLocalFiles: false,
+            modelPreset: defaultModel,
+            modelVersion: defaultVersion,
+            modelDimension: modelInfo.dimension,
+            forceOffscreen: true,
+          },
+        });
+        if (!response || !response.success) {
+          throw new Error(response?.error || ERROR_MESSAGES.TOOL_EXECUTION_FAILED);
+        }
+        return response;
+      },
+    );
 
-    if (response && response.success) {
+    if (initResult.success) {
       currentBackgroundModelConfig = {
         modelPreset: defaultModel,
         modelVersion: defaultVersion,
         modelDimension: modelInfo.dimension,
       };
-      console.log('Semantic engine initialized successfully:', currentBackgroundModelConfig);
+      console.log(
+        `Semantic engine initialized successfully in ${initResult.duration}ms:`,
+        currentBackgroundModelConfig,
+      );
 
       // Update status to ready
       await updateModelStatus('ready', 100);
@@ -95,7 +120,7 @@ export async function initializeDefaultSemanticEngine(): Promise<void> {
         );
       }
     } else {
-      const errorMessage = response?.error || ERROR_MESSAGES.TOOL_EXECUTION_FAILED;
+      const errorMessage = initResult.error?.message || ERROR_MESSAGES.TOOL_EXECUTION_FAILED;
       await updateModelStatus('error', 0, errorMessage, 'unknown');
       throw new Error(errorMessage);
     }
@@ -104,6 +129,8 @@ export async function initializeDefaultSemanticEngine(): Promise<void> {
     const errorMessage = error?.message || 'Unknown error during semantic engine initialization';
     await updateModelStatus('error', 0, errorMessage, 'unknown');
     // Don't throw error, let the extension continue running
+  } finally {
+    release();
   }
 }
 
@@ -137,6 +164,7 @@ function needsModelSwitch(
 
 /**
  * Handle model switching
+ * Protected with keepalive to prevent Service Worker termination during model download/switch
  */
 export async function handleModelSwitch(
   modelPreset: ModelPreset,
@@ -144,6 +172,9 @@ export async function handleModelSwitch(
   modelDimension?: number,
   previousDimension?: number,
 ): Promise<{ success: boolean; error?: string }> {
+  // Acquire keepalive for the entire model switch process
+  const release = acquireKeepalive('semantic-model-switch');
+
   try {
     const needsSwitch = needsModelSwitch(modelPreset, modelVersion, modelDimension);
     if (!needsSwitch) {
@@ -162,24 +193,42 @@ export async function handleModelSwitch(
       return { success: false, error: errorMessage };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_INIT,
-      config: {
-        useLocalFiles: false,
-        modelPreset: modelPreset,
-        modelVersion: modelVersion,
-        modelDimension: modelDimension,
-        forceOffscreen: true,
+    // Use keepalive-wrapped retry for the critical model switch operation
+    const switchResult = await withKeepaliveAndRetry(
+      {
+        tag: 'semantic-model-switch-offscreen',
+        timeout: 180000, // 3 minutes for model download/switch
+        retry: true,
+        maxRetries: 3,
+        retryDelay: 2000,
       },
-    });
+      async () => {
+        const response = await chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_INIT,
+          config: {
+            useLocalFiles: false,
+            modelPreset: modelPreset,
+            modelVersion: modelVersion,
+            modelDimension: modelDimension,
+            forceOffscreen: true,
+          },
+        });
+        if (!response || !response.success) {
+          throw new Error(response?.error || 'Failed to switch model');
+        }
+        return response;
+      },
+    );
 
-    if (response && response.success) {
+    if (switchResult.success) {
       currentBackgroundModelConfig = {
         modelPreset: modelPreset,
         modelVersion: modelVersion,
         modelDimension: modelDimension!,
       };
+
+      console.log(`Model switch completed in ${switchResult.duration}ms`);
 
       // Only reinitialize ContentIndexer when dimension changes
       try {
@@ -195,7 +244,7 @@ export async function handleModelSwitch(
       await updateModelStatus('ready', 100);
       return { success: true };
     } else {
-      const errorMessage = response?.error || 'Failed to switch model';
+      const errorMessage = switchResult.error?.message || 'Failed to switch model';
       const errorType = analyzeErrorType(errorMessage);
       await updateModelStatus('error', 0, errorMessage, errorType);
       throw new Error(errorMessage);
@@ -206,6 +255,8 @@ export async function handleModelSwitch(
     const errorType = analyzeErrorType(errorMessage);
     await updateModelStatus('error', 0, errorMessage, errorType);
     return { success: false, error: errorMessage };
+  } finally {
+    release();
   }
 }
 

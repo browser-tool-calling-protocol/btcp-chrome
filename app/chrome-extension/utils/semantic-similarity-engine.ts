@@ -5,6 +5,7 @@ import { SIMDMathEngine } from './simd-math-engine';
 import { OffscreenManager } from './offscreen-manager';
 import { STORAGE_KEYS } from '@/common/constants';
 import { OFFSCREEN_MESSAGE_TYPES } from '@/common/message-types';
+import { withKeepalive } from './keepalive-utils';
 
 import { ModelCacheManager } from './model-cache-manager';
 
@@ -650,56 +651,64 @@ export class SemanticSimilarityEngineProxy {
   }
 
   async getEmbedding(text: string, options: Record<string, any> = {}): Promise<Float32Array> {
-    if (!this._isInitialized) {
-      await this.initialize();
-    }
+    // Wrap entire operation with keepalive to prevent SW termination during WASM inference
+    return withKeepalive('semantic-get-embedding', async () => {
+      if (!this._isInitialized) {
+        await this.initialize();
+      }
 
-    // Check and ensure engine is initialized before each call
-    await this.ensureOffscreenEngineInitialized();
+      // Check and ensure engine is initialized before each call
+      await this.ensureOffscreenEngineInitialized();
 
-    const response = await this.sendMessageToOffscreen({
-      target: 'offscreen',
-      type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_COMPUTE,
-      text: text,
-      options: options,
+      const response = await this.sendMessageToOffscreen({
+        target: 'offscreen',
+        type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_COMPUTE,
+        text: text,
+        options: options,
+      });
+
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Failed to get embedding from offscreen document');
+      }
+
+      if (!response.embedding || !Array.isArray(response.embedding)) {
+        throw new Error('Invalid embedding data received from offscreen document');
+      }
+
+      return new Float32Array(response.embedding);
     });
-
-    if (!response || !response.success) {
-      throw new Error(response?.error || 'Failed to get embedding from offscreen document');
-    }
-
-    if (!response.embedding || !Array.isArray(response.embedding)) {
-      throw new Error('Invalid embedding data received from offscreen document');
-    }
-
-    return new Float32Array(response.embedding);
   }
 
   async getEmbeddingsBatch(
     texts: string[],
     options: Record<string, any> = {},
   ): Promise<Float32Array[]> {
-    if (!this._isInitialized) {
-      await this.initialize();
-    }
-
     if (!texts || texts.length === 0) return [];
 
-    // Check and ensure engine is initialized before each call
-    await this.ensureOffscreenEngineInitialized();
+    // Wrap entire batch operation with keepalive to prevent SW termination during WASM inference
+    return withKeepalive('semantic-get-embeddings-batch', async () => {
+      if (!this._isInitialized) {
+        await this.initialize();
+      }
 
-    const response = await this.sendMessageToOffscreen({
-      target: 'offscreen',
-      type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_BATCH_COMPUTE,
-      texts: texts,
-      options: options,
+      // Check and ensure engine is initialized before each call
+      await this.ensureOffscreenEngineInitialized();
+
+      const response = await this.sendMessageToOffscreen({
+        target: 'offscreen',
+        type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_BATCH_COMPUTE,
+        texts: texts,
+        options: options,
+      });
+
+      if (!response || !response.success) {
+        throw new Error(
+          response?.error || 'Failed to get embeddings batch from offscreen document',
+        );
+      }
+
+      return response.embeddings.map((emb: number[]) => new Float32Array(emb));
     });
-
-    if (!response || !response.success) {
-      throw new Error(response?.error || 'Failed to get embeddings batch from offscreen document');
-    }
-
-    return response.embeddings.map((emb: number[]) => new Float32Array(emb));
   }
 
   async computeSimilarity(
@@ -715,27 +724,30 @@ export class SemanticSimilarityEngineProxy {
     pairs: { text1: string; text2: string }[],
     options: Record<string, any> = {},
   ): Promise<number[]> {
-    if (!this._isInitialized) {
-      await this.initialize();
-    }
+    // Wrap entire batch operation with keepalive to prevent SW termination during WASM inference
+    return withKeepalive('semantic-compute-similarity-batch', async () => {
+      if (!this._isInitialized) {
+        await this.initialize();
+      }
 
-    // Check and ensure engine is initialized before each call
-    await this.ensureOffscreenEngineInitialized();
+      // Check and ensure engine is initialized before each call
+      await this.ensureOffscreenEngineInitialized();
 
-    const response = await this.sendMessageToOffscreen({
-      target: 'offscreen',
-      type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_BATCH_COMPUTE,
-      pairs: pairs,
-      options: options,
+      const response = await this.sendMessageToOffscreen({
+        target: 'offscreen',
+        type: OFFSCREEN_MESSAGE_TYPES.SIMILARITY_ENGINE_BATCH_COMPUTE,
+        pairs: pairs,
+        options: options,
+      });
+
+      if (!response || !response.success) {
+        throw new Error(
+          response?.error || 'Failed to compute similarity batch from offscreen document',
+        );
+      }
+
+      return response.similarities;
     });
-
-    if (!response || !response.success) {
-      throw new Error(
-        response?.error || 'Failed to compute similarity batch from offscreen document',
-      );
-    }
-
-    return response.similarities;
   }
 
   private cosineSimilarity(a: Float32Array, b: Float32Array): number {

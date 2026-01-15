@@ -136,6 +136,17 @@ chrome.runtime.onMessage.addListener(
           break;
         }
 
+        // Health check for connection monitoring - responds immediately to verify offscreen is alive
+        case 'HEALTH_CHECK': {
+          sendResponse({
+            success: true,
+            healthy: true,
+            timestamp: Date.now(),
+            engineReady: !!similarityEngine,
+          });
+          break;
+        }
+
         default:
           sendResponse({ error: `Unknown message type: ${message.type}` });
       }
