@@ -1,6 +1,9 @@
 /**
  * Content index manager
  * Responsible for automatically extracting, chunking and indexing tab content
+ *
+ * Production-ready with Service Worker keepalive protection for long-running
+ * indexing and search operations that involve WASM/ML inference.
  */
 
 import { TextChunker } from './text-chunker';
@@ -12,6 +15,7 @@ import {
   type ModelPreset,
 } from './semantic-similarity-engine';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
+import { createKeepaliveScope, withKeepalive } from './keepalive-utils';
 
 export interface IndexingOptions {
   autoIndex?: boolean;
@@ -119,6 +123,7 @@ export class ContentIndexer {
 
   /**
    * Index content of specified tab
+   * Protected with keepalive scope to ensure SW doesn't terminate during indexing
    */
   public async indexTabContent(tabId: number): Promise<void> {
     // Check if semantic engine is ready before attempting to index
@@ -139,6 +144,10 @@ export class ContentIndexer {
       }
       await this.initialize();
     }
+
+    // Create a keepalive scope for the entire indexing operation
+    // This keeps the SW alive while processing all chunks
+    const scope = createKeepaliveScope(`content-indexer-tab-${tabId}`);
 
     try {
       const tab = await chrome.tabs.get(tabId);
@@ -171,17 +180,26 @@ export class ContentIndexer {
         );
       }
 
+      // Process chunks within the keepalive scope
+      let indexedCount = 0;
       for (const chunk of chunksToIndex) {
         try {
-          const embedding = await this.semanticEngine.getEmbedding(chunk.text);
-          const label = await this.vectorDatabase.addDocument(
-            tabId,
-            tab.url!,
-            tab.title || '',
-            chunk,
-            embedding,
-          );
-          console.log(`ContentIndexer: Indexed chunk ${chunk.index} with label ${label}`);
+          await scope.execute(async () => {
+            const embedding = await this.semanticEngine.getEmbedding(chunk.text);
+            const label = await this.vectorDatabase.addDocument(
+              tabId,
+              tab.url!,
+              tab.title || '',
+              chunk,
+              embedding,
+            );
+            indexedCount++;
+            if (indexedCount % 10 === 0) {
+              console.log(
+                `ContentIndexer: Progress - indexed ${indexedCount}/${chunksToIndex.length} chunks`,
+              );
+            }
+          });
         } catch (error) {
           console.error(`ContentIndexer: Failed to index chunk ${chunk.index}:`, error);
         }
@@ -189,16 +207,18 @@ export class ContentIndexer {
 
       this.indexedPages.add(pageKey);
 
-      console.log(
-        `ContentIndexer: Successfully indexed ${chunksToIndex.length} chunks for tab ${tabId}`,
-      );
+      console.log(`ContentIndexer: Successfully indexed ${indexedCount} chunks for tab ${tabId}`);
     } catch (error) {
       console.error(`ContentIndexer: Failed to index tab ${tabId}:`, error);
+    } finally {
+      // Always release the keepalive scope when done
+      scope.release();
     }
   }
 
   /**
    * Search content
+   * Protected with keepalive to ensure SW doesn't terminate during search embedding
    */
   public async searchContent(query: string, topK: number = 10) {
     // Check if semantic engine is ready before attempting to search
@@ -218,36 +238,39 @@ export class ContentIndexer {
       await this.initialize();
     }
 
-    try {
-      const queryEmbedding = await this.semanticEngine.getEmbedding(query);
-      const results = await this.vectorDatabase.search(queryEmbedding, topK);
+    // Wrap the search operation with keepalive
+    return withKeepalive('content-indexer-search', async () => {
+      try {
+        const queryEmbedding = await this.semanticEngine.getEmbedding(query);
+        const results = await this.vectorDatabase.search(queryEmbedding, topK);
 
-      console.log(`ContentIndexer: Found ${results.length} results for query: "${query}"`);
-      return results;
-    } catch (error) {
-      console.error('ContentIndexer: Search failed:', error);
+        console.log(`ContentIndexer: Found ${results.length} results for query: "${query}"`);
+        return results;
+      } catch (error) {
+        console.error('ContentIndexer: Search failed:', error);
 
-      if (error instanceof Error && error.message.includes('not initialized')) {
-        console.log(
-          'ContentIndexer: Attempting to reinitialize semantic engine and retry search...',
-        );
-        try {
-          await this.semanticEngine.initialize();
-          const queryEmbedding = await this.semanticEngine.getEmbedding(query);
-          const results = await this.vectorDatabase.search(queryEmbedding, topK);
-
+        if (error instanceof Error && error.message.includes('not initialized')) {
           console.log(
-            `ContentIndexer: Retry successful, found ${results.length} results for query: "${query}"`,
+            'ContentIndexer: Attempting to reinitialize semantic engine and retry search...',
           );
-          return results;
-        } catch (retryError) {
-          console.error('ContentIndexer: Retry after reinitialization also failed:', retryError);
-          throw retryError;
-        }
-      }
+          try {
+            await this.semanticEngine.initialize();
+            const queryEmbedding = await this.semanticEngine.getEmbedding(query);
+            const results = await this.vectorDatabase.search(queryEmbedding, topK);
 
-      throw error;
-    }
+            console.log(
+              `ContentIndexer: Retry successful, found ${results.length} results for query: "${query}"`,
+            );
+            return results;
+          } catch (retryError) {
+            console.error('ContentIndexer: Retry after reinitialization also failed:', retryError);
+            throw retryError;
+          }
+        }
+
+        throw error;
+      }
+    });
   }
 
   /**
