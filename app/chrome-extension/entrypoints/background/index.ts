@@ -16,6 +16,13 @@ import { initTabGroupSession, initTabGroupSessionListener } from './tab-group-se
 // Record-Replay V3 (feature flag)
 import { bootstrapV3 } from './record-replay-v3/bootstrap';
 
+// AI Core - Multi-provider AI support
+import { initializeAiCore } from './ai-core';
+import { registerAiCoreHandlers } from './ai-core/handlers';
+
+// MinApps - Mini-application framework
+import { initMinAppRegistry, registerMinAppHandlers } from './minApps';
+
 /**
  * Feature flag for RR-V3
  * Set to true to enable the new Record-Replay V3 engine
@@ -44,6 +51,21 @@ export default defineBackground(() => {
   initBTCPClientListener();
   initSemanticSimilarityListener();
   initStorageManagerListener();
+
+  // Initialize AI Core for multi-provider AI support
+  registerAiCoreHandlers();
+  initializeAiCore()
+    .then(() => {
+      console.log('Background: AI Core initialized');
+    })
+    .catch((error) => {
+      console.warn('Background: AI Core initialization failed:', error);
+    });
+
+  // Initialize MinApps framework
+  initMinAppRegistry();
+  registerMinAppHandlers();
+  console.log('Background: MinApps initialized');
   // Tab group session management
   initTabGroupSession();
   initTabGroupSessionListener();

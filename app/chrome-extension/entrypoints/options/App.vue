@@ -1,398 +1,283 @@
 <template>
-  <div class="page">
-    <header class="topbar">
-      <h1>{{ m('userscriptsManagerTitle') }}</h1>
-      <div class="switch">
-        <label>
-          <input type="checkbox" v-model="emergencyDisabled" @change="saveEmergency" />
-          <span>{{ m('emergencySwitchLabel') }}</span>
-        </label>
+  <div class="options-page" :class="{ 'dark-mode': isDarkMode }">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">🌐</span>
+          <span class="logo-text">BTCP</span>
+        </div>
       </div>
-    </header>
 
-    <section class="create">
-      <h2>{{ m('createRunSectionTitle') }}</h2>
-      <div class="grid">
-        <label>
-          {{ m('nameLabel') }}
-          <input v-model="form.name" :placeholder="m('placeholderOptional')" />
-        </label>
-        <label>
-          {{ m('runAtLabel') }}
-          <select v-model="form.runAt">
-            <option value="auto">{{ m('runAtAuto') }}</option>
-            <option value="document_start">{{ m('runAtDocumentStart') }}</option>
-            <option value="document_end">{{ m('runAtDocumentEnd') }}</option>
-            <option value="document_idle">{{ m('runAtDocumentIdle') }}</option>
-          </select>
-        </label>
-        <label>
-          {{ m('worldLabel') }}
-          <select v-model="form.world">
-            <option value="auto">{{ m('worldAuto') }}</option>
-            <option value="ISOLATED">{{ m('worldIsolated') }}</option>
-            <option value="MAIN">{{ m('worldMain') }}</option>
-          </select>
-        </label>
-        <label>
-          {{ m('modeLabel') }}
-          <select v-model="form.mode">
-            <option value="auto">{{ m('modeAuto') }}</option>
-            <option value="persistent">{{ m('modePersistent') }}</option>
-            <option value="css">{{ m('modeCss') }}</option>
-            <option value="once">{{ m('modeOnce') }}</option>
-          </select>
-        </label>
-        <label>
-          {{ m('allFramesLabel') }}
-          <input type="checkbox" v-model="form.allFrames" />
-        </label>
-        <label>
-          {{ m('persistLabel') }}
-          <input type="checkbox" v-model="form.persist" />
-        </label>
-        <label>
-          {{ m('dnrFallbackLabel') }}
-          <input type="checkbox" v-model="form.dnrFallback" />
-        </label>
-      </div>
-      <label>
-        {{ m('matchesInputLabel') }}
-        <input v-model="form.matches" :placeholder="m('placeholderMatchesExample')" />
-      </label>
-      <label>
-        {{ m('excludesInputLabel') }}
-        <input v-model="form.excludes" :placeholder="m('placeholderOptional')" />
-      </label>
-      <label>
-        {{ m('tagsInputLabel') }}
-        <input v-model="form.tags" :placeholder="m('placeholderOptional')" />
-      </label>
-      <label>
-        {{ m('scriptLabel') }}
-        <textarea v-model="form.script" :placeholder="m('placeholderScriptHint')" rows="8" />
-      </label>
-      <div class="row">
-        <button :disabled="submitting" @click="apply('auto')">{{ m('applyButton') }}</button>
-        <button :disabled="submitting" @click="apply('once')">{{ m('runOnceButton') }}</button>
-        <span class="hint" v-if="lastResult">{{ lastResult }}</span>
-      </div>
-    </section>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">AI Configuration</div>
+          <button
+            v-for="item in aiNavItems"
+            :key="item.id"
+            :class="['nav-item', { active: currentPage === item.id }]"
+            @click="currentPage = item.id"
+          >
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
+          </button>
+        </div>
 
-    <section class="filters">
-      <h2>{{ m('listSectionTitle') }}</h2>
-      <div class="grid">
-        <label>
-          {{ m('queryLabel') }}
-          <input v-model="filters.query" @input="reload()" />
-        </label>
-        <label>
-          {{ m('statusLabel') }}
-          <select v-model="filters.status" @change="reload()">
-            <option value="">{{ m('statusAll') }}</option>
-            <option value="enabled">{{ m('statusEnabled') }}</option>
-            <option value="disabled">{{ m('statusDisabled') }}</option>
-          </select>
-        </label>
-        <label>
-          {{ m('domainLabel') }}
-          <input
-            v-model="filters.domain"
-            @input="reload()"
-            :placeholder="m('placeholderDomainHint')"
-          />
-        </label>
-      </div>
-      <div class="row">
-        <button @click="exportAll">{{ m('exportAllButton') }}</button>
-      </div>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>{{ m('tableHeaderName') }}</th>
-            <th>{{ m('statusLabel') }}</th>
-            <th>{{ m('tableHeaderWorld') }}</th>
-            <th>{{ m('tableHeaderRunAt') }}</th>
-            <th>{{ m('tableHeaderUpdated') }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="it in items" :key="it.id">
-            <td>{{ it.name || it.id }}</td>
-            <td>
-              <label>
-                <input type="checkbox" :checked="it.status === 'enabled'" @change="toggle(it)" />
-                {{ it.status }}
-              </label>
-            </td>
-            <td>{{ it.world }}</td>
-            <td>{{ it.runAt }}</td>
-            <td>{{ formatTime(it.updatedAt) }}</td>
-            <td class="actions">
-              <button @click="remove(it)">{{ m('deleteButton') }}</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+        <div class="nav-section">
+          <div class="nav-section-title">Tools</div>
+          <button
+            v-for="item in toolNavItems"
+            :key="item.id"
+            :class="['nav-item', { active: currentPage === item.id }]"
+            @click="currentPage = item.id"
+          >
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
+          </button>
+        </div>
+      </nav>
 
-    <!-- Flow Editor removed: unified to Builder in Popup -->
+      <div class="sidebar-footer">
+        <button class="theme-toggle" @click="toggleDarkMode">
+          {{ isDarkMode ? '☀️' : '🌙' }}
+        </button>
+        <span class="version">v1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <KeepAlive>
+        <component :is="currentPageComponent" />
+      </KeepAlive>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { TOOL_NAMES } from 'chrome-mcp-shared';
-import { STORAGE_KEYS } from '@/common/constants';
+import { ref, computed, onMounted } from 'vue';
+import ProvidersPage from './pages/ProvidersPage.vue';
+import ModelsPage from './pages/ModelsPage.vue';
+import AssistantsPage from './pages/AssistantsPage.vue';
+import PreferencesPage from './pages/PreferencesPage.vue';
+import UserscriptsPage from './pages/UserscriptsPage.vue';
 
-type ListItem = {
-  id: string;
-  name?: string;
-  status: 'enabled' | 'disabled';
-  world: 'ISOLATED' | 'MAIN';
-  runAt: 'document_start' | 'document_end' | 'document_idle';
-  updatedAt: number;
+type PageId = 'providers' | 'models' | 'assistants' | 'preferences' | 'userscripts';
+
+interface NavItem {
+  id: PageId;
+  icon: string;
+  label: string;
+}
+
+const aiNavItems: NavItem[] = [
+  { id: 'providers', icon: '🔌', label: 'AI Providers' },
+  { id: 'models', icon: '🤖', label: 'Models' },
+  { id: 'assistants', icon: '👤', label: 'Assistants' },
+  { id: 'preferences', icon: '⚙️', label: 'Preferences' },
+];
+
+const toolNavItems: NavItem[] = [{ id: 'userscripts', icon: '📜', label: 'Userscripts' }];
+
+const currentPage = ref<PageId>('providers');
+const isDarkMode = ref(false);
+
+const pageComponents = {
+  providers: ProvidersPage,
+  models: ModelsPage,
+  assistants: AssistantsPage,
+  preferences: PreferencesPage,
+  userscripts: UserscriptsPage,
 };
 
-const emergencyDisabled = ref(false);
-const items = ref<ListItem[]>([]);
-const filters = ref({ query: '', status: '', domain: '' });
+const currentPageComponent = computed(() => pageComponents[currentPage.value]);
 
-const form = ref({
-  name: '',
-  runAt: 'auto',
-  world: 'auto',
-  mode: 'auto',
-  allFrames: true,
-  persist: true,
-  dnrFallback: true,
-  script: '',
-  matches: '',
-  excludes: '',
-  tags: '',
+function toggleDarkMode() {
+  isDarkMode.value = !isDarkMode.value;
+  localStorage.setItem('btcp-dark-mode', isDarkMode.value ? 'true' : 'false');
+}
+
+onMounted(() => {
+  // Load dark mode preference
+  const saved = localStorage.getItem('btcp-dark-mode');
+  if (saved === 'true') {
+    isDarkMode.value = true;
+  } else if (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    isDarkMode.value = true;
+  }
 });
-
-const submitting = ref(false);
-const lastResult = ref('');
-
-function formatTime(ts?: number) {
-  if (!ts) return '';
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return String(ts);
-  }
-}
-
-async function saveEmergency() {
-  await globalThis.chrome?.storage?.local.set({
-    [STORAGE_KEYS.USERSCRIPTS_DISABLED]: emergencyDisabled.value,
-  });
-}
-
-async function loadEmergency() {
-  const v = await globalThis.chrome?.storage?.local.get([STORAGE_KEYS.USERSCRIPTS_DISABLED] as any);
-  emergencyDisabled.value = !!v[STORAGE_KEYS.USERSCRIPTS_DISABLED];
-}
-
-async function callTool(name: string, args: any) {
-  const res = await globalThis.chrome?.runtime?.sendMessage({
-    type: 'call_tool',
-    name,
-    args,
-  } as any);
-  if (!res || !res.success) throw new Error(res?.error || 'call failed');
-  return res.result;
-}
-
-async function reload() {
-  const result = await callTool(TOOL_NAMES.BROWSER.USERSCRIPT, {
-    action: 'list',
-    args: { ...filters.value },
-  });
-  try {
-    const txt = (result?.content?.[0]?.text as string) || '{}';
-    const data = JSON.parse(txt);
-    items.value = data.items || [];
-  } catch (e) {
-    console.warn('parse list failed', e);
-  }
-}
-
-async function apply(mode: 'auto' | 'once') {
-  if (!form.value.script.trim()) return;
-  submitting.value = true;
-  lastResult.value = '';
-  try {
-    const args: any = {
-      script: form.value.script,
-      name: form.value.name || undefined,
-      runAt: form.value.runAt as any,
-      world: form.value.world as any,
-      allFrames: !!form.value.allFrames,
-      persist: !!form.value.persist,
-      dnrFallback: !!form.value.dnrFallback,
-      mode,
-    };
-    if (form.value.matches.trim())
-      args.matches = form.value.matches.split(',').map((s) => s.trim());
-    if (form.value.excludes.trim())
-      args.excludes = form.value.excludes.split(',').map((s) => s.trim());
-    if (form.value.tags.trim()) args.tags = form.value.tags.split(',').map((s) => s.trim());
-
-    const result = await callTool(TOOL_NAMES.BROWSER.USERSCRIPT, { action: 'create', args });
-    lastResult.value = (result?.content?.[0]?.text as string) || '';
-    await reload();
-  } catch (e: any) {
-    lastResult.value = 'Error: ' + (e?.message || String(e));
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function toggle(it: ListItem) {
-  try {
-    await callTool(TOOL_NAMES.BROWSER.USERSCRIPT, {
-      action: it.status === 'enabled' ? 'disable' : 'enable',
-      args: { id: it.id },
-    });
-    await reload();
-  } catch (e) {
-    console.warn('toggle failed', e);
-  }
-}
-
-async function remove(it: ListItem) {
-  try {
-    await callTool(TOOL_NAMES.BROWSER.USERSCRIPT, { action: 'remove', args: { id: it.id } });
-    await reload();
-  } catch (e) {
-    console.warn('remove failed', e);
-  }
-}
-
-async function exportAll() {
-  try {
-    const res = await callTool(TOOL_NAMES.BROWSER.USERSCRIPT, { action: 'export', args: {} });
-    const txt = (res?.content?.[0]?.text as string) || '{}';
-    const blob = new Blob([txt], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    await globalThis.chrome?.downloads?.download({
-      url,
-      filename: 'userscripts-export.json',
-      saveAs: true,
-    } as any);
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    console.warn('export failed', e);
-  }
-}
-
-onMounted(async () => {
-  await loadEmergency();
-  await reload();
-});
-
-function m(key: string, substitutions?: string | string[]) {
-  const msg = (globalThis.chrome?.i18n?.getMessage(key, substitutions as any) || '').trim();
-  return msg || key;
-}
 </script>
 
-<style scoped>
-.page {
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    Segoe UI,
-    Roboto,
-    sans-serif;
-  padding: 16px;
+<style>
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
-.topbar {
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  line-height: 1.5;
+}
+
+#app {
+  height: 100%;
+}
+</style>
+
+<style scoped>
+.options-page {
+  display: flex;
+  height: 100vh;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.options-page.dark-mode {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.dark-mode .sidebar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dark-mode .sidebar-header {
+  border-color: #334155;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  font-size: 24px;
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: 24px;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 8px 12px;
+  letter-spacing: 0.5px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: inherit;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background: #f1f5f9;
+}
+
+.dark-mode .nav-item:hover {
+  background: #334155;
+}
+
+.nav-item.active {
+  background: #eff6ff;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.dark-mode .nav-item.active {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.nav-icon {
+  font-size: 16px;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
 }
-.create,
-.filters {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 16px;
+
+.dark-mode .sidebar-footer {
+  border-color: #334155;
 }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  gap: 4px;
-}
-input,
-select,
-textarea {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+
+.theme-toggle {
   padding: 8px;
-  font-size: 12px;
-}
-textarea {
-  resize: vertical;
-}
-.row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-button {
-  background: #3b82f6;
-  color: #fff;
   border: none;
-  padding: 8px 12px;
+  background: #f1f5f9;
   border-radius: 8px;
   cursor: pointer;
+  font-size: 16px;
 }
-button:hover {
-  background: #2563eb;
+
+.dark-mode .theme-toggle {
+  background: #334155;
 }
-.hint {
-  color: #374151;
+
+.version {
   font-size: 12px;
+  color: #94a3b8;
 }
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-}
-.table th,
-.table td {
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
-  padding: 8px;
-  font-size: 12px;
-}
-.actions {
-  text-align: right;
-}
-.switch input {
-  margin-right: 6px;
-}
-@media (max-width: 960px) {
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 640px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
 }
 </style>
