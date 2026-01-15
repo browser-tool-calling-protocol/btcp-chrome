@@ -1,5 +1,5 @@
 <template>
-  <div class="options-page" :class="{ 'dark-mode': isDarkMode }">
+  <div class="options-page" :class="{ dark: isDarkMode }">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -9,37 +9,48 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" role="navigation" aria-label="Main navigation">
         <div class="nav-section">
-          <div class="nav-section-title">AI Configuration</div>
-          <button
-            v-for="item in aiNavItems"
-            :key="item.id"
-            :class="['nav-item', { active: currentPage === item.id }]"
-            @click="currentPage = item.id"
-          >
-            <span class="nav-icon">{{ item.icon }}</span>
-            <span class="nav-label">{{ item.label }}</span>
-          </button>
+          <div class="nav-section-title" id="ai-config-title">AI Configuration</div>
+          <div role="group" aria-labelledby="ai-config-title">
+            <button
+              v-for="item in aiNavItems"
+              :key="item.id"
+              :class="['nav-item', { active: currentPage === item.id }]"
+              :aria-current="currentPage === item.id ? 'page' : undefined"
+              @click="currentPage = item.id"
+            >
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <span class="nav-label">{{ item.label }}</span>
+            </button>
+          </div>
         </div>
 
         <div class="nav-section">
-          <div class="nav-section-title">Tools</div>
-          <button
-            v-for="item in toolNavItems"
-            :key="item.id"
-            :class="['nav-item', { active: currentPage === item.id }]"
-            @click="currentPage = item.id"
-          >
-            <span class="nav-icon">{{ item.icon }}</span>
-            <span class="nav-label">{{ item.label }}</span>
-          </button>
+          <div class="nav-section-title" id="tools-title">Tools</div>
+          <div role="group" aria-labelledby="tools-title">
+            <button
+              v-for="item in toolNavItems"
+              :key="item.id"
+              :class="['nav-item', { active: currentPage === item.id }]"
+              :aria-current="currentPage === item.id ? 'page' : undefined"
+              @click="currentPage = item.id"
+            >
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <span class="nav-label">{{ item.label }}</span>
+            </button>
+          </div>
         </div>
       </nav>
 
       <div class="sidebar-footer">
-        <button class="theme-toggle" @click="toggleDarkMode">
-          {{ isDarkMode ? '☀️' : '🌙' }}
+        <button
+          class="theme-toggle"
+          @click="toggleDarkMode"
+          :aria-label="isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+          :title="isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+        >
+          <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
         </button>
         <span class="version">v1.0.0</span>
       </div>
@@ -47,15 +58,17 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <KeepAlive>
-        <component :is="currentPageComponent" />
-      </KeepAlive>
+      <Transition name="page" mode="out-in">
+        <KeepAlive>
+          <component :is="currentPageComponent" :key="currentPage" />
+        </KeepAlive>
+      </Transition>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import ProvidersPage from './pages/ProvidersPage.vue';
 import ModelsPage from './pages/ModelsPage.vue';
 import AssistantsPage from './pages/AssistantsPage.vue';
@@ -97,6 +110,15 @@ function toggleDarkMode() {
   localStorage.setItem('btcp-dark-mode', isDarkMode.value ? 'true' : 'false');
 }
 
+// Apply dark class to document for design tokens
+watch(
+  isDarkMode,
+  (dark) => {
+    document.documentElement.classList.toggle('dark', dark);
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   // Load dark mode preference
   const saved = localStorage.getItem('btcp-dark-mode');
@@ -109,6 +131,8 @@ onMounted(() => {
 </script>
 
 <style>
+@import '../shared/design-tokens.css';
+
 /* Reset */
 *,
 *::before,
@@ -124,8 +148,13 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-family);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -137,147 +166,203 @@ body {
 .options-page {
   display: flex;
   height: 100vh;
-  background: #f8fafc;
-  color: #1e293b;
-}
-
-.options-page.dark-mode {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg-page);
+  color: var(--text-primary);
 }
 
 /* Sidebar */
 .sidebar {
-  width: 240px;
-  background: #ffffff;
-  border-right: 1px solid #e2e8f0;
+  width: 260px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-}
-
-.dark-mode .sidebar {
-  background: #1e293b;
-  border-color: #334155;
+  transition:
+    background-color var(--transition-normal),
+    border-color var(--transition-normal);
 }
 
 .sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.dark-mode .sidebar-header {
-  border-color: #334155;
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .logo-icon {
-  font-size: 24px;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .logo-text {
-  font-size: 18px;
-  font-weight: 700;
-  color: #3b82f6;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 12px;
+  padding: var(--space-3);
   overflow-y: auto;
 }
 
 .nav-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
+}
+
+.nav-section:last-child {
+  margin-bottom: 0;
 }
 
 .nav-section-title {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
-  color: #64748b;
-  padding: 8px 12px;
-  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  padding: var(--space-2) var(--space-3);
+  letter-spacing: 0.05em;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-3);
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 14px;
-  color: inherit;
-  transition: all 0.15s ease;
+  font-size: var(--text-sm);
+  font-weight: var(--font-normal);
+  color: var(--text-secondary);
+  transition: var(--transition-all);
   text-align: left;
+  position: relative;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: var(--interactive-primary);
+  border-radius: var(--radius-full);
+  transition: height var(--transition-normal);
 }
 
 .nav-item:hover {
-  background: #f1f5f9;
+  background: var(--bg-surface-secondary);
+  color: var(--text-primary);
 }
 
-.dark-mode .nav-item:hover {
-  background: #334155;
+.nav-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .nav-item.active {
-  background: #eff6ff;
-  color: #3b82f6;
-  font-weight: 500;
+  background: var(--color-primary-50);
+  color: var(--interactive-primary);
+  font-weight: var(--font-medium);
 }
 
-.dark-mode .nav-item.active {
-  background: #1e3a5f;
-  color: #60a5fa;
+.dark .nav-item.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-primary-400);
+}
+
+.nav-item.active::before {
+  height: 24px;
 }
 
 .nav-icon {
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid #e2e8f0;
+  padding: var(--space-4);
+  border-top: 1px solid var(--border-default);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.dark-mode .sidebar-footer {
-  border-color: #334155;
-}
-
 .theme-toggle {
-  padding: 8px;
-  border: none;
-  background: #f1f5f9;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface-secondary);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 16px;
+  transition: var(--transition-all);
 }
 
-.dark-mode .theme-toggle {
-  background: #334155;
+.theme-toggle:hover {
+  background: var(--bg-surface-tertiary);
+  border-color: var(--border-hover);
+  transform: scale(1.05);
+}
+
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-icon {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .version {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
 }
 
 /* Main Content */
 .main-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: var(--space-8);
+  background: var(--bg-page);
+}
+
+/* Page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 </style>

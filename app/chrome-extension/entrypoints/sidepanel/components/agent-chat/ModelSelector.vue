@@ -1,83 +1,144 @@
 <template>
   <div class="model-selector" ref="selectorRef">
-    <button class="selector-trigger" @click="isOpen = !isOpen">
+    <button
+      class="selector-trigger"
+      @click="isOpen = !isOpen"
+      :aria-expanded="isOpen"
+      aria-haspopup="listbox"
+    >
       <ModelBadge
         :model-id="activeModel?.id"
         :model-name="activeModel?.name"
         :provider-id="activeProvider?.id"
         :capabilities="activeModel?.capabilities"
       />
+      <svg class="chevron" :class="{ open: isOpen }" viewBox="0 0 20 20" fill="currentColor">
+        <path
+          fill-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clip-rule="evenodd"
+        />
+      </svg>
     </button>
 
     <Teleport to="body">
-      <div v-if="isOpen" class="dropdown-overlay" @click="isOpen = false"></div>
-      <div v-if="isOpen" class="dropdown-menu" :style="dropdownStyle" ref="dropdownRef">
-        <div class="dropdown-header">
-          <span class="header-title">Select Model</span>
-          <button class="settings-btn" @click="openSettings" title="AI Settings">
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fill-rule="evenodd"
-                d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                clip-rule="evenodd"
-              />
-            </svg>
-          </button>
-        </div>
+      <Transition name="dropdown">
+        <div v-if="isOpen" class="dropdown-overlay" @click="isOpen = false"></div>
+      </Transition>
+      <Transition name="dropdown-menu">
+        <div
+          v-if="isOpen"
+          class="dropdown-menu"
+          :style="dropdownStyle"
+          ref="dropdownRef"
+          role="listbox"
+        >
+          <div class="dropdown-header">
+            <span class="header-title">Select Model</span>
+            <button
+              class="settings-btn"
+              @click="openSettings"
+              title="AI Settings"
+              aria-label="Open AI settings"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fill-rule="evenodd"
+                  d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
 
-        <div class="dropdown-content">
-          <template v-if="enabledProviders.length === 0">
-            <div class="empty-state">
-              <p>No providers enabled</p>
-              <button class="setup-btn" @click="openSettings"> Configure Providers </button>
-            </div>
-          </template>
-
-          <template v-else>
-            <div v-for="provider in enabledProviders" :key="provider.id" class="provider-group">
-              <div class="provider-header">
-                <span class="provider-icon">{{ getProviderIcon(provider.id) }}</span>
-                <span class="provider-name">{{ provider.name }}</span>
+          <div class="dropdown-content">
+            <template v-if="enabledProviders.length === 0">
+              <div class="empty-state">
+                <span class="empty-icon">🔌</span>
+                <p class="empty-title">No providers enabled</p>
+                <p class="empty-description">Configure API keys to start using AI models</p>
+                <button class="setup-btn" @click="openSettings">Configure Providers</button>
               </div>
+            </template>
 
-              <button
-                v-for="model in getModelsForProvider(provider.id)"
-                :key="model.id"
-                class="model-item"
-                :class="{ active: activeModel?.id === model.id }"
-                @click="selectModel(provider.id, model)"
-              >
-                <div class="model-info">
-                  <div class="model-name">{{ model.name }}</div>
-                  <div class="model-meta">
-                    <span class="context">{{ formatContext(model.contextLength) }}</span>
-                    <span v-if="model.pricing" class="pricing">
-                      ${{ model.pricing.input }}/${{ model.pricing.output }}
+            <template v-else>
+              <div v-for="provider in enabledProviders" :key="provider.id" class="provider-group">
+                <div class="provider-header">
+                  <span class="provider-icon">{{ getProviderIcon(provider.id) }}</span>
+                  <span class="provider-name">{{ provider.name }}</span>
+                </div>
+
+                <button
+                  v-for="model in getModelsForProvider(provider.id)"
+                  :key="model.id"
+                  class="model-item"
+                  :class="{ active: activeModel?.id === model.id }"
+                  @click="selectModel(provider.id, model)"
+                  role="option"
+                  :aria-selected="activeModel?.id === model.id"
+                >
+                  <div class="model-info">
+                    <div class="model-name">{{ model.name }}</div>
+                    <div class="model-meta">
+                      <span class="context">{{ formatContext(model.contextLength) }}</span>
+                      <span v-if="model.pricing" class="pricing">
+                        ${{ model.pricing.input }}/${{ model.pricing.output }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="model-caps">
+                    <span v-if="model.capabilities.includes('vision')" class="cap" title="Vision">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path
+                          fill-rule="evenodd"
+                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </span>
+                    <span
+                      v-if="model.capabilities.includes('function_calling')"
+                      class="cap"
+                      title="Tools"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                          fill-rule="evenodd"
+                          d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1zm1-4a1 1 0 100 2h.01a1 1 0 100-2H7zm2 1a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm4-4a1 1 0 100 2h.01a1 1 0 100-2H13zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zM7 8a1 1 0 000 2h.01a1 1 0 000-2H7z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </span>
+                    <span
+                      v-if="model.capabilities.includes('reasoning')"
+                      class="cap reasoning"
+                      title="Reasoning"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                          fill-rule="evenodd"
+                          d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
                     </span>
                   </div>
-                </div>
-                <div class="model-caps">
-                  <span v-if="model.capabilities.includes('vision')" class="cap" title="Vision"
-                    >👁️</span
-                  >
-                  <span
-                    v-if="model.capabilities.includes('function_calling')"
-                    class="cap"
-                    title="Tools"
-                    >🔧</span
-                  >
-                  <span
-                    v-if="model.capabilities.includes('reasoning')"
-                    class="cap"
-                    title="Reasoning"
-                    >🧩</span
-                  >
-                </div>
-              </button>
-            </div>
-          </template>
+                  <span v-if="activeModel?.id === model.id" class="check-icon">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fill-rule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </template>
+          </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -113,7 +174,7 @@ const dropdownStyle = ref({
   position: 'fixed' as const,
   top: '0px',
   left: '0px',
-  width: '300px',
+  width: '320px',
   zIndex: '10000',
 });
 
@@ -152,6 +213,7 @@ function updateDropdownPosition() {
 
   const rect = selectorRef.value.getBoundingClientRect();
   const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
 
   // Position above if not enough space below
   const spaceBelow = viewportHeight - rect.bottom;
@@ -162,11 +224,18 @@ function updateDropdownPosition() {
     top = rect.top - dropdownHeight - 4;
   }
 
+  // Ensure dropdown doesn't go off-screen horizontally
+  let left = rect.left;
+  const dropdownWidth = 320;
+  if (left + dropdownWidth > viewportWidth - 16) {
+    left = viewportWidth - dropdownWidth - 16;
+  }
+
   dropdownStyle.value = {
     position: 'fixed',
     top: `${top}px`,
-    left: `${rect.left}px`,
-    width: '300px',
+    left: `${left}px`,
+    width: '320px',
     zIndex: '10000',
   };
 }
@@ -180,17 +249,20 @@ watch(isOpen, (open) => {
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && isOpen.value) {
     isOpen.value = false;
+    selectorRef.value?.querySelector('button')?.focus();
   }
 }
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', updateDropdownPosition);
+  window.addEventListener('scroll', updateDropdownPosition, true);
 });
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown);
   window.removeEventListener('resize', updateDropdownPosition);
+  window.removeEventListener('scroll', updateDropdownPosition, true);
 });
 </script>
 
@@ -200,10 +272,36 @@ onUnmounted(() => {
 }
 
 .selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   border: none;
-  padding: 0;
+  padding: 4px 6px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.selector-trigger:hover {
+  background: var(--ac-surface-secondary, rgba(0, 0, 0, 0.05));
+}
+
+.selector-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ac-accent, #3b82f6);
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--ac-text-tertiary, #94a3b8);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
 }
 
 /* Dropdown */
@@ -217,7 +315,9 @@ onUnmounted(() => {
   background: var(--ac-surface-primary, white);
   border: 1px solid var(--ac-border, #e2e8f0);
   border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.15),
+    0 0 1px rgba(0, 0, 0, 0.1);
   max-height: 400px;
   display: flex;
   flex-direction: column;
@@ -230,32 +330,43 @@ onUnmounted(() => {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--ac-border, #e2e8f0);
+  background: var(--ac-surface-secondary, #f8fafc);
 }
 
 .header-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ac-text-primary, #1e293b);
 }
 
 .settings-btn {
-  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   background: transparent;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   color: var(--ac-text-secondary, #64748b);
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
 .settings-btn:hover {
-  background: var(--ac-surface-secondary, #f1f5f9);
+  background: var(--ac-surface-tertiary, #e2e8f0);
   color: var(--ac-text-primary, #1e293b);
 }
 
+.settings-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ac-accent, #3b82f6);
+}
+
 .settings-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .dropdown-content {
@@ -264,32 +375,76 @@ onUnmounted(() => {
   padding: 8px;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 24px;
-  color: var(--ac-text-secondary, #64748b);
+/* Scrollbar */
+.dropdown-content::-webkit-scrollbar {
+  width: 6px;
 }
 
-.empty-state p {
+.dropdown-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-content::-webkit-scrollbar-thumb {
+  background: var(--ac-border, #e2e8f0);
+  border-radius: 3px;
+}
+
+.dropdown-content::-webkit-scrollbar-thumb:hover {
+  background: var(--ac-text-tertiary, #94a3b8);
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.empty-icon {
+  font-size: 32px;
   margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ac-text-primary, #1e293b);
+  margin: 0 0 4px 0;
+}
+
+.empty-description {
+  font-size: 12px;
+  color: var(--ac-text-secondary, #64748b);
+  margin: 0 0 16px 0;
 }
 
 .setup-btn {
   padding: 8px 16px;
-  background: var(--ac-primary, #3b82f6);
+  background: var(--ac-accent, #3b82f6);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .setup-btn:hover {
-  background: var(--ac-primary-dark, #2563eb);
+  background: var(--ac-accent-dark, #2563eb);
+  transform: translateY(-1px);
 }
 
+.setup-btn:active {
+  transform: translateY(0);
+}
+
+/* Provider groups */
 .provider-group {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .provider-group:last-child {
@@ -301,11 +456,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--ac-text-tertiary, #94a3b8);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
 }
 
 .provider-icon {
@@ -314,7 +469,6 @@ onUnmounted(() => {
 
 .model-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
   padding: 10px 12px;
@@ -323,15 +477,21 @@ onUnmounted(() => {
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
+  transition: all 0.15s ease;
+  gap: 8px;
 }
 
 .model-item:hover {
   background: var(--ac-surface-secondary, #f8fafc);
 }
 
+.model-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ac-accent, #3b82f6);
+}
+
 .model-item.active {
-  background: var(--ac-primary-light, #eff6ff);
+  background: var(--ac-accent-light, #eff6ff);
 }
 
 .model-info {
@@ -344,6 +504,9 @@ onUnmounted(() => {
   font-weight: 500;
   color: var(--ac-text-primary, #1e293b);
   margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-meta {
@@ -355,11 +518,67 @@ onUnmounted(() => {
 
 .model-caps {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .cap {
-  font-size: 12px;
-  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--ac-surface-secondary, #f1f5f9);
+  color: var(--ac-text-secondary, #64748b);
+}
+
+.cap svg {
+  width: 12px;
+  height: 12px;
+}
+
+.cap.reasoning {
+  background: var(--ac-accent-light, #dbeafe);
+  color: var(--ac-accent, #3b82f6);
+}
+
+.check-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ac-accent, #3b82f6);
+  flex-shrink: 0;
+}
+
+.check-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Dropdown transitions */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+}
+
+.dropdown-menu-enter-active,
+.dropdown-menu-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.dropdown-menu-enter-from,
+.dropdown-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
 }
 </style>
