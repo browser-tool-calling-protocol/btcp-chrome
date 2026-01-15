@@ -129,7 +129,7 @@ export async function startSession(options?: {
 
   const sessionName = options?.name || `MCP Session ${new Date().toLocaleTimeString()}`;
   const sessionColor = options?.color || pickRandomColor();
-  const initialUrl = options?.initialUrl || 'chrome://newtab';
+  const initialUrl = options?.initialUrl || chrome.runtime.getURL('/session-management.html');
 
   console.log(`${LOG_PREFIX} Starting new session: ${sessionName}`);
 
@@ -296,7 +296,10 @@ export async function addTabToSession(tabId: number): Promise<boolean> {
 /**
  * Create a new tab in the current session's tab group
  */
-export async function createTabInSession(url: string, active = true): Promise<chrome.tabs.Tab | null> {
+export async function createTabInSession(
+  url: string,
+  active = true,
+): Promise<chrome.tabs.Tab | null> {
   if (!currentSession) {
     console.warn(`${LOG_PREFIX} No active session to create tab in`);
     return null;
